@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/StreamRoom.iml" filepath="$PROJECT_DIR$/.idea/modules/StreamRoom.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/StreamRoom.StreamRoom-build.iml" filepath="$PROJECT_DIR$/.idea/modules/StreamRoom.StreamRoom-build.iml" />
     </modules>
   </component>
 </project>

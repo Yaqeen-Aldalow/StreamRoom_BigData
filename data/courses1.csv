@@ -1,0 +1,31 @@
+CourseID;CourseName;Department;FixedNumStudents
+1;Calculus 1;Mathematics;35
+2;Calculus 2;Mathematics;50
+3;Linear Algebra;Mathematics;55
+4;Statistics;Chemistry;40
+5;Differential Equations;Chemistry;35
+6;Numerical Analysis;Chemistry;55
+7;Probability;Chemistry;45
+8;Vector Analysis;Chemistry;45
+9;Operations Research;Chemistry;55
+10;Regression Analysis;Chemistry;45
+11;Mechanics;Physics;35
+12;Electromagnetism;Physics;40
+13;Thermodynamics;Physics;35
+14;Quantum Physics;Physics;35
+15;Optics;Physics;55
+16;Waves;Physics;50
+17;Solid State;Physics;50
+18;Organic Chemistry;Chemistry;40
+19;Inorganic Chemistry;Chemistry;55
+20;Physical Chemistry;Chemistry;50
+21;Analytical Chemistry;Chemistry;45
+22;Biochemistry;Chemistry;50
+23;Industrial Chemistry;Chemistry;45
+24;Calculus 1_2;Mathematics;40
+25;Calculus 1_2;Mathematics;35
+26;Calculus 1_2;Mathematics;35
+27;Calculus 1_2;Mathematics;50
+28;Calculus 1_2;Mathematics;45
+29;Calculus 1_2;Mathematics;30
+30;Calculus 1_2;Mathematics;60
