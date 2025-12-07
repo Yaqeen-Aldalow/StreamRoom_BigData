@@ -29,7 +29,6 @@ object CsvBatchProducer {
     println(s"✅ Found ${files.length} CSV files")
 
     var counter = 0
-    val previewLimit = 5
 
     for (file <- files) {
       println(s"\n📌 Processing file: ${file.getName}")
@@ -50,14 +49,11 @@ object CsvBatchProducer {
 
             counter += 1
 
-            // اطبعي أول 5 فقط
-            if (counter <= previewLimit) {
-              println(s"✅ Sent event #$counter: $json")
-            }
+            // ✅ اطبعي كل Event
+            println(s"✅ Sent event #$counter: $json")
 
-            // كل 5 ثواني
+            // ✅ كل 5 ثواني
             Thread.sleep(5000)
-
           }
         }
       }
