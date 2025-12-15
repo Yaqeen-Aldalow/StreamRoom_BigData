@@ -4,7 +4,7 @@ import org.apache.spark.sql.{SparkSession, DataFrame}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 
-object KafkaConsumerMongo {
+object consumer{
 
   def main(args: Array[String]): Unit = {
 
@@ -16,7 +16,7 @@ object KafkaConsumerMongo {
 
     spark.sparkContext.setLogLevel("WARN")
 
-    // ✅ Schema عام لكل أنواع البيانات
+
     val schema = new StructType()
       .add("source_type", StringType)
       .add("booking_id", StringType)
@@ -41,25 +41,21 @@ object KafkaConsumerMongo {
       .add("ingestion_timestamp", StringType)
       .add("ingestion_date", StringType)
 
-    // ✅ قراءة Kafka (فقط البيانات الجديدة)
     val kafkaStream = spark.readStream
       .format("kafka")
       .option("kafka.bootstrap.servers", "localhost:9092")
       .option("subscribe", "room_requests")
-      .option("startingOffsets", "latest")   // ✅ مهم لمنع إعادة قراءة القديم
+      .option("startingOffsets", "latest")
       .load()
 
-    // ✅ تحويل JSON
     val parsed = kafkaStream
       .selectExpr("CAST(value AS STRING)")
       .select(from_json(col("value"), schema).as("data"))
       .select("data.*")
 
-    // ✅ كتابة حسب نوع البيانات + منع التكرار
     val query = parsed.writeStream
       .foreachBatch { (batchDF: DataFrame, batchId: Long) =>
 
-        // ✅ fixed_booking
         batchDF.filter(col("source_type") === "fixed_booking")
           .dropDuplicates("booking_id")
           .write
@@ -68,7 +64,6 @@ object KafkaConsumerMongo {
           .mode("append")
           .save()
 
-        // ✅ one_time_booking
         batchDF.filter(col("source_type") === "one_time_booking")
           .dropDuplicates("onetime_id")
           .write
@@ -77,7 +72,6 @@ object KafkaConsumerMongo {
           .mode("append")
           .save()
 
-        // ✅ courses
         batchDF.filter(col("source_type") === "courses")
           .dropDuplicates("course_id")
           .write
@@ -86,7 +80,6 @@ object KafkaConsumerMongo {
           .mode("append")
           .save()
 
-        // ✅ professors
         batchDF.filter(col("source_type") === "professors")
           .dropDuplicates("professor_id")
           .write
@@ -95,7 +88,6 @@ object KafkaConsumerMongo {
           .mode("append")
           .save()
 
-        // ✅ sections
         batchDF.filter(col("source_type") === "sections")
           .dropDuplicates("section_id")
           .write
@@ -104,7 +96,6 @@ object KafkaConsumerMongo {
           .mode("append")
           .save()
 
-        // ✅ classrooms
         batchDF.filter(col("source_type") === "classroom")
           .dropDuplicates("classroom_id")
           .write

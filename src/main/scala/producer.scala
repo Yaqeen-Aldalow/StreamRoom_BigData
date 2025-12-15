@@ -48,7 +48,7 @@ object producer {
               counter += 1
               println(s"✅ Sent event #$counter: $json")
 
-              Thread.sleep(200)   // ✅ سرعة مناسبة للـ streaming
+              Thread.sleep(200)
             }
           }
         }
@@ -60,7 +60,6 @@ object producer {
     println("✅ Stream completed successfully.")
   }
 
-  // اختيار الدالة المناسبة حسب اسم الملف
   def getParser(filename: String): String => String = {
     val name = filename.toLowerCase
     if (name.contains("bookings") && !name.contains("onetime")) csvToJsonFixed
@@ -72,7 +71,6 @@ object producer {
     else null
   }
 
-  // دالة مشتركة للوقت
   def timestamps(): (String, String) = {
     val now = LocalDateTime.now(ZoneId.of("Asia/Jerusalem"))
     val ts = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
@@ -80,7 +78,6 @@ object producer {
     (ts, date)
   }
 
-  // ✅ جدول البوكينغ الثابت
   def csvToJsonFixed(line: String): String = {
     val parts = line.split(";")
     if (parts.length < 7) return null
@@ -100,7 +97,6 @@ object producer {
     }"""
   }
 
-  // ✅ جدول الحجز لمرة واحدة
   def csvToJsonOneTime(line: String): String = {
     val parts = line.split(";")
     if (parts.length < 8) return null
@@ -121,7 +117,6 @@ object producer {
     }"""
   }
 
-  // ✅ جدول القاعات
   def csvToJsonClassroom(line: String): String = {
     val parts = line.split(";")
     if (parts.length < 4) return null
@@ -138,7 +133,6 @@ object producer {
     }"""
   }
 
-  // ✅ جدول الكورسات
   def csvToJsonCourses(line: String): String = {
     val parts = line.split(";")
     if (parts.length < 4) return null
@@ -155,7 +149,6 @@ object producer {
     }"""
   }
 
-  // ✅ جدول الدكاترة
   def csvToJsonProfessors(line: String): String = {
     val parts = line.split(";")
     if (parts.length < 4) return null
@@ -172,7 +165,6 @@ object producer {
     }"""
   }
 
-  // ✅ جدول السكاشن
   def csvToJsonSections(line: String): String = {
     val parts = line.split(";")
     if (parts.length < 8) return null
