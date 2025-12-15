@@ -7,7 +7,7 @@ import scala.io.Source
 import java.time.{LocalDateTime, ZoneId}
 import java.time.format.DateTimeFormatter
 
-object CsvBatchProducer {
+object producer {
 
   def main(args: Array[String]): Unit = {
 
@@ -34,63 +34,162 @@ object CsvBatchProducer {
       println(s"\n📌 Processing file: ${file.getName}")
 
       val lines = Source.fromFile(file).getLines().drop(1)
+      val parser = getParser(file.getName)
 
-      for (line <- lines) {
+      if (parser == null) {
+        println(s"⚠️ No parser found for file: ${file.getName}")
+      } else {
+        for (line <- lines) {
+          if (line.trim.nonEmpty) {
+            val json = parser(line)
+            if (json != null) {
+              val record = new ProducerRecord[String, String](topic, json)
+              producer.send(record)
+              counter += 1
+              println(s"✅ Sent event #$counter: $json")
 
-        if (line.trim.isEmpty) {
-          // skip empty lines silently
-        } else {
-
-          val json = csvToJson(line)
-
-          if (json != null) {
-            val record = new ProducerRecord[String, String](topic, json)
-            producer.send(record)
-
-            counter += 1
-
-            // ✅ اطبعي كل Event
-            println(s"✅ Sent event #$counter: $json")
-
-            // ✅ كل 5 ثواني
-            Thread.sleep(5000)
+              Thread.sleep(200)   // ✅ سرعة مناسبة للـ streaming
+            }
           }
         }
       }
     }
 
     producer.close()
-
     println(s"\n✅✅ Done! Sent a total of $counter events to Kafka.")
     println("✅ Stream completed successfully.")
   }
 
-  def csvToJson(line: String): String = {
+  // اختيار الدالة المناسبة حسب اسم الملف
+  def getParser(filename: String): String => String = {
+    val name = filename.toLowerCase
+    if (name.contains("bookings") && !name.contains("onetime")) csvToJsonFixed
+    else if (name.contains("onetime")) csvToJsonOneTime
+    else if (name.contains("courses")) csvToJsonCourses
+    else if (name.contains("sections")) csvToJsonSections
+    else if (name.contains("professors")) csvToJsonProfessors
+    else if (name.contains("classroom")) csvToJsonClassroom
+    else null
+  }
+
+  // دالة مشتركة للوقت
+  def timestamps(): (String, String) = {
+    val now = LocalDateTime.now(ZoneId.of("Asia/Jerusalem"))
+    val ts = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+    val date = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+    (ts, date)
+  }
+
+  // ✅ جدول البوكينغ الثابت
+  def csvToJsonFixed(line: String): String = {
     val parts = line.split(";")
+    if (parts.length < 7) return null
+    val (ts, date) = timestamps()
 
-    if (parts.length < 8) {
-      return null
-    }
+    s"""{
+       "source_type": "fixed_booking",
+       "booking_id": "${parts(0).trim}",
+       "section_id": "${parts(1).trim}",
+       "classroom_id": "${parts(2).trim}",
+       "date": "${parts(3).trim}",
+       "start_time": "${parts(4).trim}",
+       "end_time": "${parts(5).trim}",
+       "students": ${parts(6).trim},
+       "ingestion_timestamp": "$ts",
+       "ingestion_date": "$date"
+    }"""
+  }
 
-    try {
-      val now = LocalDateTime.now(ZoneId.of("Asia/Jerusalem"))
-      val timestamp = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-      val dateOnly = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+  // ✅ جدول الحجز لمرة واحدة
+  def csvToJsonOneTime(line: String): String = {
+    val parts = line.split(";")
+    if (parts.length < 8) return null
+    val (ts, date) = timestamps()
 
-      s"""{
-         "course_id": "${parts(0).trim}",
-         "department": "${parts(1).trim}",
-         "students_count": ${parts(2).trim},
-         "days": "${parts(3).trim}",
-         "time": "${parts(4).trim}",
-         "type": "${parts(5).trim}",
-         "building": "${parts(6).trim}",
-         "room": "${parts(7).trim}",
-         "ingestion_timestamp": "$timestamp",
-         "ingestion_date": "$dateOnly"
-      }"""
-    } catch {
-      case _: Exception => null
-    }
+    s"""{
+       "source_type": "one_time_booking",
+       "onetime_id": "${parts(0).trim}",
+       "professor_id": "${parts(1).trim}",
+       "classroom_id": "${parts(2).trim}",
+       "date": "${parts(3).trim}",
+       "start_time": "${parts(4).trim}",
+       "end_time": "${parts(5).trim}",
+       "students": ${parts(6).trim},
+       "booking_type": "${parts(7).trim}",
+       "ingestion_timestamp": "$ts",
+       "ingestion_date": "$date"
+    }"""
+  }
+
+  // ✅ جدول القاعات
+  def csvToJsonClassroom(line: String): String = {
+    val parts = line.split(";")
+    if (parts.length < 4) return null
+    val (ts, date) = timestamps()
+
+    s"""{
+       "source_type": "classroom",
+       "classroom_id": "${parts(0).trim}",
+       "college_id": "${parts(1).trim}",
+       "room_number": "${parts(2).trim}",
+       "capacity": ${parts(3).trim},
+       "ingestion_timestamp": "$ts",
+       "ingestion_date": "$date"
+    }"""
+  }
+
+  // ✅ جدول الكورسات
+  def csvToJsonCourses(line: String): String = {
+    val parts = line.split(";")
+    if (parts.length < 4) return null
+    val (ts, date) = timestamps()
+
+    s"""{
+       "source_type": "courses",
+       "course_id": "${parts(0).trim}",
+       "course_name": "${parts(1).trim}",
+       "department": "${parts(2).trim}",
+       "fixed_students": ${parts(3).trim},
+       "ingestion_timestamp": "$ts",
+       "ingestion_date": "$date"
+    }"""
+  }
+
+  // ✅ جدول الدكاترة
+  def csvToJsonProfessors(line: String): String = {
+    val parts = line.split(";")
+    if (parts.length < 4) return null
+    val (ts, date) = timestamps()
+
+    s"""{
+       "source_type": "professors",
+       "professor_id": "${parts(0).trim}",
+       "name": "${parts(1).trim}",
+       "department": "${parts(2).trim}",
+       "college_id": "${parts(3).trim}",
+       "ingestion_timestamp": "$ts",
+       "ingestion_date": "$date"
+    }"""
+  }
+
+  // ✅ جدول السكاشن
+  def csvToJsonSections(line: String): String = {
+    val parts = line.split(";")
+    if (parts.length < 8) return null
+    val (ts, date) = timestamps()
+
+    s"""{
+       "source_type": "sections",
+       "section_id": "${parts(0).trim}",
+       "course_id": "${parts(1).trim}",
+       "professor_id": "${parts(2).trim}",
+       "day_schedule": "${parts(3).trim}",
+       "start_hour": "${parts(4).trim}",
+       "duration_hours": "${parts(5).trim}",
+       "classroom_id": "${parts(6).trim}",
+       "fixed_students": ${parts(7).trim},
+       "ingestion_timestamp": "$ts",
+       "ingestion_date": "$date"
+    }"""
   }
 }
