@@ -108,5 +108,6 @@ object consumer{
       .start()
 
     query.awaitTermination()
-  }
+ // test edit
+ }
 }
