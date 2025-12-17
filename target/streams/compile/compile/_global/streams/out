@@ -1,0 +1,31 @@
+[0m[[0m[31merror[0m] [0m[0mC:\Users\HP\Desktop\lappp\StreamRoom_BigData\src\main\scala\BloomFilter.scala:41:45: value approximateElementCount is not a member of org.apache.spark.util.sketch.BloomFilter[0m
+[0m[[0m[31merror[0m] [0m[0m  def approximateElementCount: Long = bloom.approximateElementCount()[0m
+[0m[[0m[31merror[0m] [0m[0m                                            ^[0m
+[0m[[0m[31merror[0m] [0m[0mC:\Users\HP\Desktop\lappp\StreamRoom_BigData\src\main\scala\BloomFilterTest.scala:6:8: object BloomFilter is not a member of package utils[0m
+[0m[[0m[31merror[0m] [0m[0mimport utils.BloomFilter[0m
+[0m[[0m[31merror[0m] [0m[0m       ^[0m
+[0m[[0m[31merror[0m] [0m[0mC:\Users\HP\Desktop\lappp\StreamRoom_BigData\src\main\scala\BloomFilterTest.scala:59:48: not found: value Row[0m
+[0m[[0m[31merror[0m] [0m[0m    val df = spark.createDataFrame(rawData.map(Row.fromTuple(_))).toDF(schema.fieldNames: _*)[0m
+[0m[[0m[31merror[0m] [0m[0m                                               ^[0m
+[0m[[0m[31merror[0m] [0m[0mC:\Users\HP\Desktop\lappp\StreamRoom_BigData\src\main\scala\BloomFilterTest.scala:65:22: not found: value BloomFilter[0m
+[0m[[0m[31merror[0m] [0m[0m    val fixedClean = BloomFilter.filterFixedBookings(df)[0m
+[0m[[0m[31merror[0m] [0m[0m                     ^[0m
+[0m[[0m[31merror[0m] [0m[0mC:\Users\HP\Desktop\lappp\StreamRoom_BigData\src\main\scala\BloomFilterTest.scala:66:24: not found: value BloomFilter[0m
+[0m[[0m[31merror[0m] [0m[0m    val oneTimeClean = BloomFilter.filterOneTimeBookings(df)[0m
+[0m[[0m[31merror[0m] [0m[0m                       ^[0m
+[0m[[0m[31merror[0m] [0m[0mC:\Users\HP\Desktop\lappp\StreamRoom_BigData\src\main\scala\BloomFilterTest.scala:67:24: not found: value BloomFilter[0m
+[0m[[0m[31merror[0m] [0m[0m    val coursesClean = BloomFilter.filterCourses(df)[0m
+[0m[[0m[31merror[0m] [0m[0m                       ^[0m
+[0m[[0m[31merror[0m] [0m[0mC:\Users\HP\Desktop\lappp\StreamRoom_BigData\src\main\scala\BloomFilterTest.scala:68:25: not found: value BloomFilter[0m
+[0m[[0m[31merror[0m] [0m[0m    val sectionsClean = BloomFilter.filterSections(df)[0m
+[0m[[0m[31merror[0m] [0m[0m                        ^[0m
+[0m[[0m[31merror[0m] [0m[0mC:\Users\HP\Desktop\lappp\StreamRoom_BigData\src\main\scala\BloomFilterTest.scala:69:27: not found: value BloomFilter[0m
+[0m[[0m[31merror[0m] [0m[0m    val professorsClean = BloomFilter.filterProfessors(df)[0m
+[0m[[0m[31merror[0m] [0m[0m                          ^[0m
+[0m[[0m[31merror[0m] [0m[0mC:\Users\HP\Desktop\lappp\StreamRoom_BigData\src\main\scala\BloomFilterTest.scala:70:27: not found: value BloomFilter[0m
+[0m[[0m[31merror[0m] [0m[0m    val classroomsClean = BloomFilter.filterClassrooms(df)[0m
+[0m[[0m[31merror[0m] [0m[0m                          ^[0m
+[0m[[0m[31merror[0m] [0m[0mC:\Users\HP\Desktop\lappp\StreamRoom_BigData\src\main\scala\BloomFilterTest.scala:100:69: not found: value BloomFilter[0m
+[0m[[0m[31merror[0m] [0m[0m    println(s"\nApproximate unique elements seen by Bloom filter: ${BloomFilter.approximateElementCount}")[0m
+[0m[[0m[31merror[0m] [0m[0m                                                                    ^[0m
+[0m[[0m[31merror[0m] [0m[0m10 errors found[0m
