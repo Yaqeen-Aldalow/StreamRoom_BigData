@@ -4,6 +4,8 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/StreamRoom.iml" filepath="$PROJECT_DIR$/.idea/modules/StreamRoom.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/StreamRoom.StreamRoom-build.iml" filepath="$PROJECT_DIR$/.idea/modules/StreamRoom.StreamRoom-build.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/StreamRoom_BigData/StreamRoom.main.iml" filepath="$PROJECT_DIR$/.idea/modules/StreamRoom_BigData/StreamRoom.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/StreamRoom_BigData/StreamRoom.test.iml" filepath="$PROJECT_DIR$/.idea/modules/StreamRoom_BigData/StreamRoom.test.iml" />
     </modules>
   </component>
 </project>
