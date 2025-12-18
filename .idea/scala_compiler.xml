@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ScalaCompilerConfiguration">
+    <option name="separateProdTestSources" value="true" />
+    <profile name="sbt 1" modules="StreamRoom,StreamRoom.main,StreamRoom.test,streamroom_bigdata-rawa_30,streamroom_bigdata-rawa_30.main,streamroom_bigdata-rawa_30.test" />
+  </component>
+</project>
