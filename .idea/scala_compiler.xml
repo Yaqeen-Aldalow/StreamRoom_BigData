@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ScalaCompilerConfiguration">
-    <option name="separateProdTestSources" value="true" />
     <profile name="sbt 1" modules="StreamRoom,StreamRoom.main,StreamRoom.test,streamroom,streamroom_1757" />
   </component>
 </project>
