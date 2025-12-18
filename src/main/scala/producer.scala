@@ -21,23 +21,23 @@ object producer {
 
     val folder = new File("data")
     if (!folder.exists() || !folder.isDirectory) {
-      println("❌ Folder 'data' not found. Create it and add CSV files.")
+      println(" Folder 'data' not found. Create it and add CSV files.")
       return
     }
 
     val files = folder.listFiles().filter(_.getName.endsWith(".csv"))
-    println(s"✅ Found ${files.length} CSV files")
+    println(s" Found ${files.length} CSV files")
 
     var counter = 0
 
     for (file <- files) {
-      println(s"\n📌 Processing file: ${file.getName}")
+      println(s"\n Processing file: ${file.getName}")
 
       val lines = Source.fromFile(file).getLines().drop(1)
       val parser = getParser(file.getName)
 
       if (parser == null) {
-        println(s"⚠️ No parser found for file: ${file.getName}")
+        println(s"⚠ No parser found for file: ${file.getName}")
       } else {
         for (line <- lines) {
           if (line.trim.nonEmpty) {
@@ -46,7 +46,7 @@ object producer {
               val record = new ProducerRecord[String, String](topic, json)
               producer.send(record)
               counter += 1
-              println(s"✅ Sent event #$counter: $json")
+              println(s" Sent event #$counter: $json")
 
               Thread.sleep(200)
             }
@@ -56,8 +56,8 @@ object producer {
     }
 
     producer.close()
-    println(s"\n✅✅ Done! Sent a total of $counter events to Kafka.")
-    println("✅ Stream completed successfully.")
+    println(s"\n Done! Sent a total of $counter events to Kafka.")
+    println(" Stream completed successfully.")
   }
 
   def getParser(filename: String): String => String = {

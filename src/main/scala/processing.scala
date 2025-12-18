@@ -19,9 +19,6 @@ object HybridRecommendationApp {
     spark.sparkContext.setLogLevel("WARN")
     import spark.implicits._
 
-    // ============================
-    // 1) قراءة البيانات من MongoDB
-    // ============================
 
     val classrooms = spark.read.format("mongo")
       .option("uri", "mongodb://127.0.0.1/StreamRoom.classrooms")
@@ -48,14 +45,11 @@ object HybridRecommendationApp {
       .withColumnRenamed("fixed_students", "students")
       .withColumnRenamed("course_id", "course_name")
 
-    // دمج كل الأحداث للاستفادة في الusage
     val events = fixedBookings
       .union(oneTimeBookings)
       .filter(col("classroom_id").isNotNull)
 
-    // ============================
-    // 2) حساب usage / collaborative score
-    // ============================
+
 
     val usage = events
       .groupBy("classroom_id")
@@ -69,7 +63,6 @@ object HybridRecommendationApp {
         col("usage_count") / max("usage_count").over(window)
       )
 
-    // تجهيز timestamps للحجوزات (عشان التعارض)
     val eventsWithTs = events
       .withColumn(
         "start_ts",
@@ -80,9 +73,7 @@ object HybridRecommendationApp {
         to_timestamp(concat_ws(" ", col("date"), col("end_time")), "dd/MM/yyyy HH:mm")
       )
 
-    // ============================
-    // 3) دالة حساب content score
-    // ============================
+   
 
     def contentScore(dept: String, students: Int): DataFrame = {
       classrooms
@@ -94,9 +85,7 @@ object HybridRecommendationApp {
         )
     }
 
-    // ============================
-    // 4) دالة تجنب التعارض بالوقت
-    // ============================
+
 
     def addAvailability(
                          baseRooms: DataFrame,
@@ -128,9 +117,7 @@ object HybridRecommendationApp {
         .drop("has_conflict")
     }
 
-    // ============================
-    // 5) دالة التوصية الأساسية لطلب واحد
-    // ============================
+
 
     def recommendRoomsForRequest(
                                   dept: String,
@@ -151,9 +138,9 @@ object HybridRecommendationApp {
           "final_score",
           col("content_score") * 0.3 +
             col("collab_score") * 0.3 +
-            col("availability_score") * 0.4      // نعطي أولوية لكونها متاحة فعلاً
+            col("availability_score") * 0.4
         )
-        .filter(col("availability_score") === 1.0) // نستبعد القاعات المتعارضة
+        .filter(col("availability_score") === 1.0)
         .orderBy(desc("final_score"))
         .select(
           col("classroom_id"),
@@ -168,13 +155,10 @@ object HybridRecommendationApp {
         .limit(3)
     }
 
-    // ============================
-    // 6) مثال (أ) – بداية الفصل: نطبق على كل كورس
-    // ============================
+
 
     val courseRows = courses.select("course_name", "department", "students").collect()
 
-    // نفترض إن الدكتور بده كل الكورسات في تاريخ معيّن (مثلاً أول أسبوع)
     val defaultDate   = "02/09/2025"
     val defaultStart  = "08:00"
     val defaultEnd    = "09:00"
@@ -196,9 +180,7 @@ object HybridRecommendationApp {
     println("===== Best 3 rooms per course (start of semester) =====")
     resultsForCourses.show(false)
 
-    // ============================
-    // 7) مثال (ب) – نص الفصل: طلب واحد (امتحان/إيفنت)
-    // ============================
+
 
     val midDept        = "Mathematics"
     val midStudents    = 40
@@ -216,9 +198,7 @@ object HybridRecommendationApp {
     println("===== Best 3 rooms for mid-semester event/exam =====")
     midResults.show(false)
 
-    // ============================
-    // 8) تقييم بسيط (اختياري)
-    // ============================
+
 
     val eval = resultsForCourses.withColumn(
       "error",
