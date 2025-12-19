@@ -1,7 +1,6 @@
 ThisBuild / version := "0.1.0-SNAPSHOT"
 
 ThisBuild / scalaVersion := "2.12.20"
-
 lazy val root = (project in file("."))
   .settings(
     name := "StreamRoom",
@@ -13,6 +12,8 @@ lazy val root = (project in file("."))
       "org.apache.kafka" % "kafka-clients" % "3.6.0",
       "org.mongodb.spark" %% "mongo-spark-connector" % "3.0.1",
        "com.google.guava" % "guava" % "33.0.0-jre",
-       "com.google.guava" % "guava" % "32.1.3-jre"
+       "com.google.guava" % "guava" % "32.1.3-jre",
+
+
     )
   )

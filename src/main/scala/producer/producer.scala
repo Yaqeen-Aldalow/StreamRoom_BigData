@@ -1,11 +1,12 @@
 package producer
 
-import java.io.File
-import java.util.Properties
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import scala.io.Source
-import java.time.{LocalDateTime, ZoneId}
+
+import java.io.File
 import java.time.format.DateTimeFormatter
+import java.time.{LocalDateTime, ZoneId}
+import java.util.Properties
+import scala.io.Source
 
 object producer {
 
