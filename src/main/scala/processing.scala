@@ -1,96 +1,83 @@
-//object processing {
+
 package processing
 
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
+import com.google.common.hash.{BloomFilter, Funnels}
+import java.nio.charset.StandardCharsets
 
-object processing {
+object HybridRecommendationApp {
 
   def main(args: Array[String]): Unit = {
 
-    // ===============================
-    // 1) Create Spark Session
-  
+    // 1) Spark Session
     val spark = SparkSession.builder()
-      .appName("Classroom Recommendation Engine")
+      .appName("Hybrid Room Recommendation")
       .master("local[*]")
+      .config("spark.mongodb.read.connection.uri", "mongodb://127.0.0.1/StreamRoom")
       .getOrCreate()
-
-    spark.sparkContext.setLogLevel("WARN")
 
     import spark.implicits._
 
-    // ===============================
-    // 2) Read Streaming Data from Kafka
-    
-    val rawKafkaStream = spark.readStream
-      .format("kafka")
-      .option("kafka.bootstrap.servers", "localhost:9092")
-      .option("subscribe", "rooms_stream")
-      .option("startingOffsets", "latest")
+    // 2) Load only essential data
+    val classrooms = spark.read.format("mongo")
+      .option("uri", "mongodb://127.0.0.1/StreamRoom.classrooms")
       .load()
+      .select("classroom_id", "capacity", "college_id")
+      .withColumn("capacity", col("capacity").cast(IntegerType))
 
-    // Convert Kafka value from bytes → string
-    val stringDF = rawKafkaStream.selectExpr("CAST(value AS STRING) as json")
+    val bookings = spark.read.format("mongo")
+      .option("uri", "mongodb://127.0.0.1/StreamRoom.confirmed_bookings")
+      .load()
+      .select("booking_id", "classroom_id", "students")
 
-    // ===============================
-    // 3) Define Schema of Incoming JSON
-    // ===============================
-    val schema = new StructType()
-      .add("room_id", IntegerType)
-      .add("room_name", StringType)
-      .add("building", StringType)
-      .add("college", StringType)
-      .add("course_name", StringType)
-      .add("doctor_name", StringType)
-      .add("expected_students", IntegerType)
-      .add("capacity", IntegerType)
-      .add("historical_frequency", DoubleType)
-      .add("is_reserved", BooleanType)
+    // 3) Collaborative usage score
+    val usage = bookings.groupBy("classroom_id").agg(count("*").as("usage_count"))
+    val maxUsage = usage.select(max("usage_count")).as[Long].headOption.getOrElse(1L)
+    val collaborativeScore = usage.withColumn("collab_score", $"usage_count" / maxUsage)
 
-    // Parse JSON into real columns
-    val parsed = stringDF.select(from_json(col("json"), schema).as("data"))
-      .select("data.*")
+    // 4) Bloom Filter (avoid duplicates)
+    val bloom = BloomFilter.create[String](
+      Funnels.stringFunnel(StandardCharsets.UTF_8),
+      100000,
+      0.01
+    )
+    bookings.select("booking_id").as[String].collect().foreach { id =>
+      if (id != null) bloom.put(id)
+    }
 
-    // ===============================
-    // 4) Data Cleaning
-    // ===============================
-    val cleaned = parsed
-      .na.drop()                       // remove null rows
-      .dropDuplicates()                // remove duplicate records
-      .filter($"capacity" > 0)         // valid capacity
-      .filter($"expected_students" > 0)
+    // 5) Content score
+    def contentScore(dept: String, students: Int, course: String): DataFrame = {
+      classrooms
+        .withColumn("capacity_clean",
+          when($"capacity".isNull || $"capacity" <= 0, lit(null).cast(IntegerType))
+            .otherwise($"capacity"))
+        .withColumn("capacity_score",
+          when($"capacity_clean".isNull, 0.05)
+            .otherwise(
+              when($"capacity_clean" < students, 0.0)
+                .otherwise(1.0 / ($"capacity_clean" - students + 1))
+            )
+        )
+        .withColumn("content_score",
+          when(lower($"college_id") === dept.toLowerCase, 1.0).otherwise(0.6))
+        .withColumn("course_score",
+          when(lower(lit(course)).contains("lab"), 1.0).otherwise(0.0))
+    }
 
-    // ===============================
-    // 5) Recommendation Algorithm
-    // ===============================
-    // (في المشروع الحقيقي الدكتور رح يدخل هدول من واجهة، هون نحط قيم تجريبية)
+    // 6) Metrics (MSE/RMSE)
+    def printCapacityMetrics(df: DataFrame, students: Int): Unit = {
+      val errs = df
+        .withColumn("capacity_clean",
+          when($"capacity".isNull || $"capacity" <= 0, 0).otherwise($"capacity"))
+        .withColumn("error_sq", pow($"capacity_clean" - students, 2))
+        .agg(avg($"error_sq").as("mse"))
+        .withColumn("rmse", sqrt($"mse"))
 
-    val doctorCourse = "Algorithms"
-    val doctorStudents = 70
-
-    val recommended = cleaned
-      .filter($"course_name" === doctorCourse)        // نفس المادة
-      .filter($"capacity" >= doctorStudents)          // تسع عدد الطلاب
-      .filter($"is_reserved" === false)               // القاعة مش محجوزة
-      .withColumn(
-        "score",
-        $"historical_frequency" * 0.6 -              // استخدام القاعة سابقًا
-          abs($"capacity" - doctorStudents) * 0.4      // أقرب سعة مطابقة للدكتور
-      )
-      .orderBy(desc("score"))
-      .limit(3)
-
-    // ===============================
-    // 6) Output Stream to Console (Temporary)
-    // ===============================
-    val query = recommended.writeStream
-      .format("console")
-      .outputMode("complete")
-      .option("truncate", false)
-      .start()
-
-    query.awaitTermination()
+      val metrics = errs.select("mse", "rmse").first()
+      println(f"📊 MSE = ${metrics.getDouble(0)}%.4f, RMSE = ${metrics.getDouble(1)}%.4f")
+    }
+    printCapacityMetrics(scored, students)
   }
 }
