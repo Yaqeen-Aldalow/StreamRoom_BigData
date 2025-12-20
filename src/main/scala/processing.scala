@@ -23,7 +23,7 @@ object processing {
 
     // ===============================
     // 2) Read Streaming Data from Kafka
-    // ===============================
+    
     val rawKafkaStream = spark.readStream
       .format("kafka")
       .option("kafka.bootstrap.servers", "localhost:9092")
