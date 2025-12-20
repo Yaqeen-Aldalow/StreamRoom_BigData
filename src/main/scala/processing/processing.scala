@@ -1,6 +1,5 @@
 package processing
 
-import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, SparkSession}
@@ -22,6 +21,7 @@ object HybridRecommendationApp {
       .getOrCreate()
 
     spark.sparkContext.setLogLevel("WARN")
+    import spark.implicits._
 
     // ================= READ DATA =================
     val classrooms = spark.read.format("mongo")
@@ -42,14 +42,15 @@ object HybridRecommendationApp {
 
     val events = fixedBookings.union(oneTimeBookings)
 
+    // usage per classroom
     val usage = events.groupBy("classroom_id")
       .agg(count("*").alias("usage_count"))
 
-    val window = Window.orderBy(desc("usage_count"))
-
+    // Avoid WindowExec warning: compute max usage as a scalar
+    val maxUsage = usage.agg(max("usage_count")).as[Long].collect().headOption.getOrElse(1L)
     val collaborativeScore = usage.withColumn(
       "collab_score",
-      col("usage_count") / max("usage_count").over(window)
+      col("usage_count") / lit(maxUsage)
     )
 
     val eventsWithTs = events
@@ -69,15 +70,33 @@ object HybridRecommendationApp {
       f"${p(0).toInt}%02d:${p(1).toInt}%02d"
     }
 
+    // Content features + capacity handling (including unknown capacities)
     def contentScore(dept: String, students: Int, course: String): DataFrame = {
+      val deptLower = dept.toLowerCase
       classrooms
-        .filter(col("capacity") >= students)
-        .withColumn("capacity_diff", col("capacity") - students)
+        // normalize capacity (unknown or invalid -> null)
+        .withColumn("capacity_clean",
+          when(col("capacity").isNull || col("capacity") <= 0, lit(null).cast(IntegerType))
+            .otherwise(col("capacity")))
+        // difference if capacity known
+        .withColumn("capacity_diff",
+          when(col("capacity_clean").isNotNull, col("capacity_clean") - lit(students)))
+        // higher score when capacity is just-enough; unknown capacity gets tiny score; too-small rooms get 0
+        .withColumn("capacity_score",
+          when(col("capacity_clean").isNull, lit(0.05))
+            .otherwise(
+              when(col("capacity_clean") < lit(students), lit(0.0))
+                .otherwise(
+                  lit(1.0) / (col("capacity_clean") - lit(students) + lit(1))
+                )
+
+
+            )
+        )
         .withColumn(
           "content_score",
-          when(lower(col("college_id")) === dept.toLowerCase, 1.0).otherwise(0.6)
+          when(lower(col("college_id")) === deptLower, 1.0).otherwise(0.6)
         )
-        // إذا المادة فيها كلمة "lab" نعطي وزن إضافي
         .withColumn(
           "course_score",
           when(lower(lit(course)).contains("lab"), 1.0).otherwise(0.0)
@@ -99,36 +118,52 @@ object HybridRecommendationApp {
         .drop("busy")
     }
 
-    def recommendRooms(dept: String, students: Int, d: String, s: String, e: String, doctor: String, course: String, existing: DataFrame): DataFrame = {
+    def recommendRooms(
+                        dept: String,
+                        students: Int,
+                        d: String,
+                        s: String,
+                        e: String,
+                        doctor: String,
+                        course: String,
+                        existing: DataFrame
+                      ): DataFrame = {
       val base = contentScore(dept, students, course)
       val free = addAvailability(base, d, s, e)
 
-      // حساب تفضيل الدكتور من confirmed_bookings
+      // doctor preference
       val doctorBookings = existing
         .filter(lower(col("doctor_name")) === doctor.toLowerCase)
         .groupBy("classroom_id")
         .agg(count("*").alias("doctor_usage"))
 
-      val maxDoctorUsage = if (doctorBookings.isEmpty) 1 else doctorBookings.agg(max("doctor_usage")).first().getLong(0)
+      val docCount = doctorBookings.count()
+      val maxDoctorUsage = if (docCount == 0) 1L
+      else doctorBookings.agg(max("doctor_usage")).as[Long].collect().head
 
       val doctorPrefScore = doctorBookings.withColumn(
         "prof_pref_score",
         col("doctor_usage") / lit(maxDoctorUsage)
       )
 
-      free.join(collaborativeScore, Seq("classroom_id"), "left")
+      val scored = free
+        .join(collaborativeScore, Seq("classroom_id"), "left")
         .join(doctorPrefScore, Seq("classroom_id"), "left")
-        .na.fill(0)
+        .na.fill(0, Seq("usage_count", "collab_score", "doctor_usage", "prof_pref_score"))
+        // updated weights: emphasize availability and capacity fit
         .withColumn("final_score",
-          col("content_score") * 0.25 +
-            col("course_score") * 0.15 +
-            col("collab_score") * 0.25 +
-            col("availability_score") * 0.2 +
-            col("prof_pref_score") * 0.15
+          col("content_score")      * 0.20 +
+            col("course_score")       * 0.10 +
+            col("collab_score")       * 0.20 +
+            col("availability_score") * 0.25 +
+            col("prof_pref_score")    * 0.05 +
+            col("capacity_score")     * 0.20
         )
-        .filter(col("availability_score") === 1)
-        .orderBy(desc("final_score"))
-        .limit(3)
+        // must be available; capacity must be adequate or unknown
+        .filter(col("availability_score") === 1.0 &&
+          (col("capacity_clean") >= lit(students) || col("capacity_clean").isNull))
+
+      scored.orderBy(desc("final_score")).limit(3)
     }
 
     // ================= BLOOM FILTER =================
@@ -141,8 +176,7 @@ object HybridRecommendationApp {
       .load()
 
     if (existing.columns.contains("booking_id")) {
-      existing.select("booking_id").collect().foreach { row =>
-        val v = row.getAs[String]("booking_id")
+      existing.select("booking_id").as[String].collect().foreach { v =>
         if (v != null) bloomFilter.put(v)
       }
     }
@@ -150,6 +184,47 @@ object HybridRecommendationApp {
     def bookingKey(dept: String, students: Int, date: String, start: String, end: String,
                    doctor: String, course: String, classroomId: String): String = {
       s"$dept|$students|$date|$start|$end|$doctor|$course|$classroomId"
+    }
+
+    // ================= METRICS (MSE/RMSE) =================
+    def printCapacityMetrics(df: DataFrame, students: Int): Unit = {
+      val errs = df
+        .withColumn("capacity_clean",
+          when(col("capacity").isNull || col("capacity") <= 0, lit(0)).otherwise(col("capacity")))
+        .withColumn("error_sq", pow(col("capacity_clean") - lit(students), 2))
+        .agg(avg(col("error_sq")).alias("mse"))
+        .withColumn("rmse", sqrt(col("mse")))
+
+      val metrics = errs.select("mse", "rmse").first()
+      val mseVal = metrics.getDouble(0)
+      val rmseVal = metrics.getDouble(1)
+      println(f"📊 Capacity fit -> MSE = $mseVal%.4f, RMSE = $rmseVal%.4f")
+    }
+
+    // ================= INPUT VALIDATION =================
+    def validateDate(input: String): Option[String] = {
+      try {
+        val parts = input.split("/")
+        if (parts.length != 3) return None
+        val day = parts(0).toInt
+        val month = parts(1).toInt
+        val year = parts(2).toInt
+        if (day >= 1 && day <= 30 && month >= 1 && month <= 12) {
+          Some(f"$day%02d/$month%02d/$year")
+        } else None
+      } catch { case _: Exception => None }
+    }
+
+    def validateTime(input: String): Option[String] = {
+      try {
+        val parts = input.split(":")
+        if (parts.length != 2) return None
+        val hour = parts(0).toInt
+        val minute = parts(1).toInt
+        if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+          Some(f"$hour%02d:$minute%02d")
+        } else None
+      } catch { case _: Exception => None }
     }
 
     // ================= LIVE DEMO =================
@@ -166,17 +241,35 @@ object HybridRecommendationApp {
         println("Enter students:")
         val students = StdIn.readLine().trim.toInt
 
-        println("Enter date (dd/MM/yyyy):")
-        val rawDate = StdIn.readLine().trim
-        val date = padDate(rawDate)
+        var date: String = ""
+        do {
+          println("Enter date (dd/MM/yyyy):")
+          val rawDate = StdIn.readLine().trim
+          validateDate(rawDate) match {
+            case Some(valid) => date = valid
+            case None => println("⚠️ Invalid date! Day must be ≤ 30 and month ≤ 12.")
+          }
+        } while (date.isEmpty)
 
-        println("Enter start (HH:mm):")
-        val rawStart = StdIn.readLine().trim
-        val start = padTime(rawStart)
+        var start: String = ""
+        do {
+          println("Enter start (HH:mm):")
+          val rawStart = StdIn.readLine().trim
+          validateTime(rawStart) match {
+            case Some(valid) => start = valid
+            case None => println("⚠️ Invalid time! Hour must be 0–23 and minute 0–59.")
+          }
+        } while (start.isEmpty)
 
-        println("Enter end (HH:mm):")
-        val rawEnd = StdIn.readLine().trim
-        val end = padTime(rawEnd)
+        var end: String = ""
+        do {
+          println("Enter end (HH:mm):")
+          val rawEnd = StdIn.readLine().trim
+          validateTime(rawEnd) match {
+            case Some(valid) => end = valid
+            case None => println("⚠️ Invalid time! Hour must be 0–23 and minute 0–59.")
+          }
+        } while (end.isEmpty)
 
         println("Doctor name:")
         val doctor = StdIn.readLine().trim
@@ -190,6 +283,9 @@ object HybridRecommendationApp {
           println("⚠️ No available rooms")
         } else {
           result.show(false)
+
+          // Print capacity metrics for the top recommendations
+          printCapacityMetrics(result, students)
 
           println("Choose classroom_id:")
           val chosen = StdIn.readLine().trim
@@ -211,13 +307,18 @@ object HybridRecommendationApp {
               .withColumn("requested_department", lit(dept))
               .withColumn("booking_id", lit(key))
 
-            booking.write
-              .format("mongo")
-              .option("uri", "mongodb://127.0.0.1/StreamRoom.confirmed_bookings")
-              .mode("append")
-              .save()
-
-            println("✅ Booking saved")
+            // If user typed an ID not in the top-3, warn before saving
+            val countChosen = booking.count()
+            if (countChosen == 0) {
+              println("⚠️ Selected classroom_id is not in the current top-3 recommendations. Booking not saved.")
+            } else {
+              booking.write
+                .format("mongo")
+                .option("uri", "mongodb://127.0.0.1/StreamRoom.confirmed_bookings")
+                .mode("append")
+                .save()
+              println("✅ Booking saved")
+            }
           }
         }
       }
