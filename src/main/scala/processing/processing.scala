@@ -87,12 +87,11 @@ object HybridRecommendationApp {
             .otherwise(
               when(col("capacity_clean") < lit(students), lit(0.0))
                 .otherwise(
-                  lit(1.0) / (col("capacity_clean") - lit(students) + lit(1))
+                  exp(- (col("capacity_clean") - lit(students)) / 20.0)
                 )
-
-
             )
         )
+
         .withColumn(
           "content_score",
           when(lower(col("college_id")) === deptLower, 1.0).otherwise(0.6)
